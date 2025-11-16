@@ -176,14 +176,23 @@ export default function Index() {
 						fetchArticles({ reset: false });
 					}
 				}}
-				ListHeaderComponent={
-					error ? (
-						<View style={styles.errorContainer}>
-							<Text style={styles.errorText}>{error}</Text>
-							<Button title={isLoading ? 'Retrying...' : 'Retry'} onPress={() => fetchArticles({ reset: true })} disabled={isLoading} />
+				ListHeaderComponent={() => (
+					<View>
+						<View style={styles.header}>
+							<Image
+								source={require('../../../assets/logo_stayTuned.png')}
+								style={styles.headerLogo}
+								resizeMode="contain"
+							/>
 						</View>
-					) : null
-				}
+						{error ? (
+							<View style={styles.errorContainer}>
+								<Text style={styles.errorText}>{error}</Text>
+								<Button title={isLoading ? 'Retrying...' : 'Retry'} onPress={() => fetchArticles({ reset: true })} disabled={isLoading} />
+							</View>
+						) : null}
+					</View>
+				)}
 				ListFooterComponent={
 					isLoadingMore ? (
 						<View style={styles.footer}>
@@ -282,6 +291,17 @@ const styles = StyleSheet.create({
 	},
 	emptyText: {
 		color: '#60708a',
+	},
+	header: {
+		alignItems: 'center',
+		justifyContent: 'center',
+		paddingTop: 8,
+		paddingBottom: 12,
+	},
+	headerLogo: {
+		height: 30,
+		width: 180,
+		transform: [{ scale: 5 }], // visually larger without increasing header height
 	},
 	fabRight: {
 		position: 'absolute',

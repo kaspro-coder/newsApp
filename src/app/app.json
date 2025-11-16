@@ -1,0 +1,19 @@
+{
+    "expo": {
+      "icon": "./assets/icon.png",
+      "android": {
+        "adaptiveIcon": {
+          "foregroundImage": "./assets/adaptive-icon.png",
+          "backgroundColor": "#FFFFFF"
+        }
+      },
+      "ios": {
+        "icon": "./assets/icon.png"
+      },
+      "splash": {
+        "image": "./assets/splash-icon.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#FFFFFF"
+      }
+    }
+  }
