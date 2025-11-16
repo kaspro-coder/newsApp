@@ -164,7 +164,12 @@ export default function Index() {
 				}}
 				ItemSeparatorComponent={() => <View style={styles.separator} />}
 				refreshing={isLoading}
-				onRefresh={() => fetchArticles({ reset: true })}
+				onRefresh={() => {
+					setActiveQuery('');
+					setSearchInput('');
+					setIsSearchOpen(false);
+					fetchArticles({ reset: true, term: '' });
+				}}
 				onEndReachedThreshold={0.5}
 				onEndReached={() => {
 				 if (!isLoading && !isLoadingMore && hasMore) {
