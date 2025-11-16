@@ -5,6 +5,7 @@ export default function App() {
     return (
         <SafeAreaView style={{ flex: 1 }}>
             <Stack
+                initialRouteName="Home"
                 screenOptions={{ contentStyle: { backgroundColor: '#fff' } }} // This is the screen options of the app
             >
                 <Stack.Screen name="home" options={{ headerShown: false }} />
