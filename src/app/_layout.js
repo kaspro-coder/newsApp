@@ -5,11 +5,12 @@ export default function App() {
     return (
         <SafeAreaView style={{ flex: 1 }}>
             <Stack
-                initialRouteName="Home"
                 screenOptions={{ contentStyle: { backgroundColor: '#fff' } }} // This is the screen options of the app
             >
-                <Stack.Screen name="home" options={{ headerShown: false }} />
-                <Stack.Screen name="+not-found" options={{ headerShown: false }} />
+                <Stack.Screen name="home" options={{headerShown: false}}/> 
+                <Stack.Screen name="auth" /> 
+                <Stack.Screen name="details" />
+                <Stack.Screen name="+not-found" />
             </Stack >
         </SafeAreaView>
     );

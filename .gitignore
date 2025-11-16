@@ -35,6 +35,8 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
-.idea/
+.idea
 .vscode/
 *.swp
+package-lock.json
+package.json

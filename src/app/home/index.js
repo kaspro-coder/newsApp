@@ -1,4 +1,3 @@
-import React from 'react';
 import { View, Text } from 'react-native';
 
 const NEWS_ITEMS = [
@@ -7,7 +6,7 @@ const NEWS_ITEMS = [
 	{ id: '3', title: 'Événement communautaire', date: '2025-11-05' },
 ];
 
-export default function HomeNewsList() {
+export default function Index() {
 	return (
 		<View>
 			{NEWS_ITEMS.map((item) => (
@@ -19,4 +18,3 @@ export default function HomeNewsList() {
 		</View>
 	);
 }
-

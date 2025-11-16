@@ -1,10 +1,12 @@
-import React from 'react';
-import { Slot } from 'expo-router';
+// app/home/_layout.js
+import { Stack } from 'expo-router';
 
 export default function HomeLayout() {
-    return (
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                <Text style={{ fontSize: 24 }}>test</Text>
-            </View>
-        );
+  return (
+    // Pas d'options ici, il hérite du parent
+    <Stack>
+      <Stack.Screen name="index" options={{headerShown : false}}/>
+      <Stack.Screen name="profile" />
+    </Stack>
+  );
 }
