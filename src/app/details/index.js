@@ -1,6 +1,8 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect, useRef } from 'react';
 import { View, Text, Image, ScrollView, StyleSheet } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { incrementArticlesRead, addReadingTime, incrementTopicCount } from '../../utils/readingStats';
 
 const getArticleImageUrl = (article) => {
 	const candidates = [
@@ -58,6 +60,9 @@ const formatAuthors = (authors) => {
 
 export default function DetailsIndex() {
 	const params = useLocalSearchParams();
+	const startTimeRef = useRef(null);
+	const hasTrackedRef = useRef(false);
+
 	const article = useMemo(() => {
 		try {
 			const raw = typeof params?.item === 'string' ? params.item : '';
@@ -81,6 +86,43 @@ export default function DetailsIndex() {
 		article?.summary ??
 		article?.description ??
 		'';
+
+	// Track reading statistics
+	useEffect(() => {
+		// Record article opened
+		const trackArticleOpen = async () => {
+			if (hasTrackedRef.current) return;
+			hasTrackedRef.current = true;
+
+			try {
+				// Increment articles read counter
+				await incrementArticlesRead();
+
+				// Get the last selected category from storage (set by home screen)
+				const lastCategory = await AsyncStorage.getItem('lastSelectedCategory');
+				const topic = lastCategory || 'general';
+				await incrementTopicCount(topic);
+			} catch (error) {
+				console.error('Error tracking article open:', error);
+			}
+		};
+
+		// Start reading time timer
+		startTimeRef.current = Date.now();
+		trackArticleOpen();
+
+		// Cleanup: stop timer and record reading time when component unmounts
+		return () => {
+			if (startTimeRef.current) {
+				const readingTime = Date.now() - startTimeRef.current;
+				if (readingTime > 0) {
+					addReadingTime(readingTime).catch((error) => {
+						console.error('Error tracking reading time:', error);
+					});
+				}
+			}
+		};
+	}, []);
 
 	return (
 		<ScrollView contentContainerStyle={styles.container}>

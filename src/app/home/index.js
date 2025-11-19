@@ -1,11 +1,22 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, Button, FlatList, ActivityIndicator, Image, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
+import { View, Text, Button, FlatList, ActivityIndicator, Image, StyleSheet, TouchableOpacity, TextInput, ScrollView } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { router } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const EVENT_API_KEY = process.env.EXPO_PUBLIC_EVENTREGISTRY_API_KEY;
 const EVENT_API_URL = 'https://eventregistry.org/api/v1/article/getArticles';
 const PAGE_SIZE = 50;
+
+// Category mapping to conceptUri
+const CATEGORIES = [
+	{ id: 'sport', label: 'Sport', conceptUri: 'http://en.wikipedia.org/wiki/Sport' },
+	{ id: 'games', label: 'Games', conceptUri: 'http://en.wikipedia.org/wiki/Game' },
+	{ id: 'politics', label: 'Politics', conceptUri: 'http://en.wikipedia.org/wiki/Politics' },
+	{ id: 'business', label: 'Business', conceptUri: 'http://en.wikipedia.org/wiki/Business' },
+	{ id: 'technology', label: 'Technology', conceptUri: 'http://en.wikipedia.org/wiki/Technology' },
+	{ id: 'science', label: 'Science', conceptUri: 'http://en.wikipedia.org/wiki/Science' },
+];
 
 const getArticleImageUrl = (article) => {
 	const candidates = [
@@ -37,9 +48,10 @@ export default function Index() {
 	const [isSearchOpen, setIsSearchOpen] = useState(false);
 	const [searchInput, setSearchInput] = useState('');
 	const [activeQuery, setActiveQuery] = useState('');
+	const [selectedCategory, setSelectedCategory] = useState(null);
 	const inputRef = useRef(null);
 
-	const fetchArticles = useCallback(async ({ reset = false, term } = {}) => {
+	const fetchArticles = useCallback(async ({ reset = false, term, category } = {}) => {
 		const targetPage = reset ? 1 : page;
 		if (reset) {
 			setIsLoading(true);
@@ -48,38 +60,86 @@ export default function Index() {
 		}
 		try {
 			const keyword = typeof term === 'string' ? term : activeQuery;
-			const queryPayload = {
-				query: {
-					$query: {
-						$and: [
-							...(keyword
-								? [
-										{
-											$or: [
-												{ keyword: keyword, keywordLoc: 'body' },
-												{ keyword: keyword, keywordLoc: 'title' },
-											],
-										},
-								  ]
-								: []),
-							{
-								$or: [{ lang: 'eng' }, { lang: 'fra' }],
-							},
-						],
+			const activeCategory = category !== undefined ? category : selectedCategory;
+			const hasSearchTerm = keyword && keyword.trim().length > 0;
+			
+			let queryPayload;
+			
+			if (hasSearchTerm) {
+				// GENERAL SEARCH MODE: Ignore category, search across all news
+				// Search in both title and body, across eng + fra languages
+				queryPayload = {
+					query: {
+						$query: {
+							$and: [
+								{
+									keyword: keyword.trim(),
+									keywordLoc: 'body',
+								},
+								{
+									keyword: keyword.trim(),
+									keywordLoc: 'title',
+								},
+								{
+									$or: [
+										{ lang: 'eng' },
+										{ lang: 'fra' },
+									],
+								},
+							],
+						},
+						$filter: {
+							forceMaxDataTimeWindow: '31',
+							startSourceRankPercentile: 0,
+							endSourceRankPercentile: 40,
+							isDuplicate: 'skipDuplicates',
+						},
 					},
-					$filter: {
-						forceMaxDataTimeWindow: '31',
-						startSourceRankPercentile: 0,
-						endSourceRankPercentile: 40,
-						isDuplicate: 'skipDuplicates',
+					resultType: 'articles',
+					articlesSortBy: 'date',
+					articlesCount: PAGE_SIZE,
+					articlesPage: targetPage,
+					apiKey: EVENT_API_KEY,
+				};
+			} else {
+				// CATEGORY MODE: Use category-based query (fallback when no search term)
+				const andConditions = [];
+				
+				// Add category conceptUri if a category is selected
+				if (activeCategory) {
+					const categoryData = CATEGORIES.find(cat => cat.id === activeCategory);
+					if (categoryData) {
+						andConditions.push({
+							conceptUri: categoryData.conceptUri,
+						});
+					}
+				}
+				
+				// Always add language filter for category mode
+				andConditions.push({
+					lang: 'eng',
+				});
+				
+				queryPayload = {
+					query: {
+						$query: {
+							$and: andConditions,
+						},
+						$filter: {
+							forceMaxDataTimeWindow: '31',
+							startSourceRankPercentile: 0,
+							endSourceRankPercentile: 40,
+							isDuplicate: 'skipDuplicates',
+						},
 					},
-				},
-				resultType: 'articles',
-				articlesSortBy: 'date',
-				articlesCount: PAGE_SIZE,
-				articlesPage: targetPage,
-				apiKey: EVENT_API_KEY,
-			};
+					resultType: 'articles',
+					articlesSortBy: 'date',
+					articlesCount: PAGE_SIZE,
+					articlesPage: targetPage,
+					apiKey: EVENT_API_KEY,
+				};
+			}
+			// Make API call using fetch (Expo compatible)
 			const response = await fetch(EVENT_API_URL, {
 				method: 'POST',
 				headers: {
@@ -116,7 +176,7 @@ export default function Index() {
 				setIsLoadingMore(false);
 			}
 		}
-	}, [page, activeQuery]);
+	}, [page, activeQuery, selectedCategory]);
 
 	useEffect(() => {
 		fetchArticles({ reset: true });
@@ -132,8 +192,14 @@ export default function Index() {
 					return (
 						<TouchableOpacity
 							activeOpacity={0.8}
-							onPress={() => {
+							onPress={async () => {
 								try {
+									// Store the current selected category for reading stats tracking
+									if (selectedCategory) {
+										await AsyncStorage.setItem('lastSelectedCategory', selectedCategory);
+									} else {
+										await AsyncStorage.removeItem('lastSelectedCategory');
+									}
 									const payload = encodeURIComponent(JSON.stringify(item));
 									router.push({ pathname: '/details', params: { item: payload } });
 								} catch {
@@ -165,15 +231,17 @@ export default function Index() {
 				ItemSeparatorComponent={() => <View style={styles.separator} />}
 				refreshing={isLoading}
 				onRefresh={() => {
-					setActiveQuery('');
-					setSearchInput('');
+					// Refresh: if search is active, refresh search; otherwise refresh category
+					const currentTerm = activeQuery || '';
 					setIsSearchOpen(false);
-					fetchArticles({ reset: true, term: '' });
+					fetchArticles({ reset: true, term: currentTerm, category: selectedCategory });
 				}}
 				onEndReachedThreshold={0.5}
 				onEndReached={() => {
 				 if (!isLoading && !isLoadingMore && hasMore) {
-						fetchArticles({ reset: false });
+						// Load more: preserve current mode (search or category)
+						const currentTerm = activeQuery || '';
+						fetchArticles({ reset: false, term: currentTerm, category: selectedCategory });
 					}
 				}}
 				ListHeaderComponent={() => (
@@ -185,10 +253,32 @@ export default function Index() {
 								resizeMode="contain"
 							/>
 						</View>
+						<CategoryMenu
+							categories={CATEGORIES}
+							selectedCategory={selectedCategory}
+							onSelectCategory={(categoryId) => {
+								// Toggle: if same category is clicked, deselect it
+								const newCategory = selectedCategory === categoryId ? null : categoryId;
+								setSelectedCategory(newCategory);
+								// Clear search when selecting category
+								setActiveQuery('');
+								setSearchInput('');
+								setIsSearchOpen(false);
+								// Fetch with category (no search term, so category mode will be used)
+								fetchArticles({ reset: true, category: newCategory, term: '' });
+							}}
+						/>
 						{error ? (
 							<View style={styles.errorContainer}>
 								<Text style={styles.errorText}>{error}</Text>
-								<Button title={isLoading ? 'Retrying...' : 'Retry'} onPress={() => fetchArticles({ reset: true })} disabled={isLoading} />
+								<Button 
+									title={isLoading ? 'Retrying...' : 'Retry'} 
+									onPress={() => {
+										const currentTerm = activeQuery || '';
+										fetchArticles({ reset: true, term: currentTerm, category: selectedCategory });
+									}} 
+									disabled={isLoading} 
+								/>
 							</View>
 						) : null}
 					</View>
@@ -221,7 +311,8 @@ export default function Index() {
 						onSubmitEditing={() => {
 							const term = (searchInput || '').trim();
 							setActiveQuery(term);
-							fetchArticles({ reset: true, term });
+							// Search mode: ignore category, perform general search
+							fetchArticles({ reset: true, term, category: null });
 						}}
 					/>
 				</View>
@@ -243,6 +334,43 @@ export default function Index() {
 		</View>
 	);
 }
+
+// Category Menu Component
+const CategoryMenu = ({ categories, selectedCategory, onSelectCategory }) => {
+	return (
+		<View style={styles.categoryMenuContainer}>
+			<ScrollView
+				horizontal
+				showsHorizontalScrollIndicator={false}
+				contentContainerStyle={styles.categoryMenuContent}
+			>
+				{categories.map((category) => {
+					const isSelected = selectedCategory === category.id;
+					return (
+						<TouchableOpacity
+							key={category.id}
+							style={[
+								styles.categoryChip,
+								isSelected && styles.categoryChipSelected,
+							]}
+							onPress={() => onSelectCategory(category.id)}
+							activeOpacity={0.7}
+						>
+							<Text
+								style={[
+									styles.categoryChipText,
+									isSelected && styles.categoryChipTextSelected,
+								]}
+							>
+								{category.label}
+							</Text>
+						</TouchableOpacity>
+					);
+				})}
+			</ScrollView>
+		</View>
+	);
+};
 
 const styles = StyleSheet.create({
 	card: {
@@ -337,5 +465,36 @@ const styles = StyleSheet.create({
 		height: 40,
 		fontSize: 16,
 		color: '#0b1221',
-	}
+	},
+	categoryMenuContainer: {
+		paddingVertical: 12,
+		paddingHorizontal: 12,
+		borderBottomWidth: 1,
+		borderBottomColor: 'rgba(0,0,0,0.06)',
+	},
+	categoryMenuContent: {
+		paddingRight: 12,
+	},
+	categoryChip: {
+		paddingHorizontal: 16,
+		paddingVertical: 8,
+		borderRadius: 20,
+		backgroundColor: '#e9eef4',
+		marginRight: 8,
+		borderWidth: 1,
+		borderColor: 'rgba(0,0,0,0.08)',
+	},
+	categoryChipSelected: {
+		backgroundColor: '#0b1221',
+		borderColor: '#0b1221',
+	},
+	categoryChipText: {
+		fontSize: 14,
+		fontWeight: '500',
+		color: '#60708a',
+	},
+	categoryChipTextSelected: {
+		color: '#fff',
+		fontWeight: '600',
+	},
 });

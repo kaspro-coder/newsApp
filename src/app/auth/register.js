@@ -6,7 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { auth, db, storage } from '../../lib/firebaseApp';
 import { doc, setDoc } from 'firebase/firestore';
-import { ref, uploadString, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { router } from 'expo-router';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
@@ -66,12 +66,14 @@ export default function Register() {
 			let photoPath = null;
 			let photoURL = null;
 			if (localPhoto) {
-				// Upload base64 string directly to Firebase Storage to avoid Blob/ArrayBuffer issues
-				const base64Data = await FileSystem.readAsStringAsync(localPhoto, { encoding: FileSystem.EncodingType.Base64 });
+				// Use fetch(uri) → blob() method (recommended for Expo)
+				// This avoids ArrayBuffer conversion issues
+				const response = await fetch(localPhoto);
+				const blob = await response.blob();
 				photoPath = `profiles/${uid}.jpg`;
 				const storageRef = ref(storage, photoPath);
-				// Use uploadString with 'base64' format
-				await uploadString(storageRef, base64Data, 'base64', { contentType: 'image/jpeg' });
+				// Upload blob with explicit contentType
+				await uploadBytes(storageRef, blob, { contentType: 'image/jpeg' });
 				photoURL = await getDownloadURL(storageRef);
 				// Cache locally with a stable path
 				const cachePath = `${FileSystem.cacheDirectory}profile_${uid}.jpg`;
